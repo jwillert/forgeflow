@@ -33,7 +33,7 @@ export async function drainUntilIdle(gateway: RunOnceGateway, options: DrainUnti
 
   for (let iteration = 1; iteration <= maxIterations; iteration++) {
     const result = await gateway.runOnce({ maxEvents: options.maxEvents, parallel: options.parallel, limit: options.limit })
-    const didWork = result.poll.commands > 0 || result.worker.processed > 0
+    const didWork = result.poll.events > 0 || result.poll.commands > 0 || result.worker.processed > 0
     results.push(result)
 
     await options.onIteration?.({ iteration, maxIterations, result, didWork })

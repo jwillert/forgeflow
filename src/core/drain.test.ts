@@ -2,9 +2,9 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import { drainUntilIdle, type RunOnceResult } from "./drain.js"
 
-function result(commands: number, processed: number): RunOnceResult {
+function result(commands: number, processed: number, events = commands): RunOnceResult {
   return {
-    poll: { events: commands, commands, deferred: 0, rejected: 0 },
+    poll: { events, commands, deferred: 0, rejected: 0 },
     worker: { processed, succeeded: processed, failed: 0 },
   }
 }
@@ -29,6 +29,21 @@ describe("drainUntilIdle", () => {
       { maxEvents: 50, parallel: 2, limit: 4 },
       { maxEvents: 50, parallel: 2, limit: 4 },
     ])
+  })
+
+  it("continues after polling events even when no command was queued", async () => {
+    const sequence = [result(0, 0, 1), result(0, 0, 0)]
+    let calls = 0
+
+    const drained = await drainUntilIdle({
+      async runOnce() {
+        return sequence[calls++] ?? result(0, 0, 0)
+      },
+    }, { maxIterations: 5 })
+
+    assert.equal(drained.idle, true)
+    assert.equal(drained.iterations, 2)
+    assert.equal(drained.results.length, 2)
   })
 
   it("stops after maxIterations when work never drains", async () => {
