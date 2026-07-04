@@ -11,10 +11,11 @@
     "./github": "./dist/providers/github/index.js",
     "./gitlab": "./dist/providers/gitlab/index.js",
     "./sqlite": "./dist/state/sqlite/index.js",
-    "./process": "./dist/process/index.js"
+    "./process": "./dist/process/index.js",
+    "./workflows": "./dist/workflows/index.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node scripts/copy-workflow-prompts.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --test dist/**/*.test.js",
     "forgeflow:once": ".forgeflow/run-once.sh",
@@ -23,7 +24,6 @@
   },
   "dependencies": {
     "@ai-hero/sandcastle": "^0.12.0",
-    "@standard-schema/spec": "^1.1.0",
     "better-sqlite3": "^11.7.0",
     "commander": "^12.1.0",
     "dotenv": "^17.4.2",

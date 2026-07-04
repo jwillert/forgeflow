@@ -1,5 +1,5 @@
-import type { AgentCommand, CodeTargetRef, NormalizedEvent } from "./types.js"
-import type { CapabilityRegistry, CodeReader, CodeHost, CommandState, TrustPolicy, WorkReader, WorkTracker } from "./capabilities.js"
+import type { AgentCommand, CodeTargetRef, NormalizedEvent, TargetKind } from "./types.js"
+import type { CapabilityRegistry, CodeReader, CodeHost, CodeReviewHost, CommandState, TrustPolicy, WorkReader, WorkTracker } from "./capabilities.js"
 
 export type MatchDecision =
   | { type: "ignore" }
@@ -27,8 +27,10 @@ export type MatchContext = {
 
 export type RunContext = {
   command: AgentCommand
+  workReader: WorkReader
   workTracker: WorkTracker
   codeHost: CodeHost
+  codeReviewHost: CodeReviewHost
   commandState: CommandState
   capabilities: CapabilityRegistry
 }
@@ -51,6 +53,11 @@ export interface GatewayReadState {
 
 export function labelAdded(event: NormalizedEvent, label: string): boolean {
   return event.kind === "label_added" && event.label === label
+}
+
+/** True for any "PR-like" target kind — GitHub pull requests and GitLab merge requests alike. */
+export function isChangeRequestKind(kind: TargetKind): boolean {
+  return kind === "pull_request" || kind === "merge_request"
 }
 
 export function defaultCommandId(input: { event: NormalizedEvent; workflowId: string }): string {

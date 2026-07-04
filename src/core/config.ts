@@ -13,6 +13,7 @@ export type EnabledTarget = {
   workTracker: import("./capabilities.js").WorkTracker
   codeReader: import("./capabilities.js").CodeReader
   codeHost: import("./capabilities.js").CodeHost
+  codeReviewHost: import("./capabilities.js").CodeReviewHost
 }
 
 export type ForgeflowConfig = {

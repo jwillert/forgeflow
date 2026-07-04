@@ -75,6 +75,42 @@ export type ChangeRequestRef = {
   provider: ProviderId
   id: string
   url?: string
+  kind: TargetKind
+}
+
+export type ChangeRequestDetails = {
+  sourceBranch: string
+  sourceSha: string
+  targetBranch: string
+  title: string
+  isCrossRepository: boolean
+  linkedIssueId?: string
+}
+
+export type GeneralComment = {
+  author?: string
+  body: string
+  createdAt?: string
+}
+
+export type ReviewThreadComment = {
+  id: string
+  author?: string
+  body: string
+}
+
+export type ReviewThread = {
+  id: string
+  path?: string
+  line?: number
+  isResolved: boolean
+  comments: ReviewThreadComment[]
+}
+
+export type InlineReviewComment = {
+  path: string
+  line: number
+  body: string
 }
 
 export type ExecutionResult =

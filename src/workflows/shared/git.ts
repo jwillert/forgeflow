@@ -1,4 +1,4 @@
-import { runProcessOrThrow } from "forgeflow"
+import { runProcessOrThrow } from "../../process/index.js"
 
 export async function git(args: string[], options: { cwd?: string } = {}): Promise<string> {
   const result = await runProcessOrThrow({ command: "git", args, cwd: options.cwd })
@@ -15,11 +15,6 @@ export async function checkoutBaseBranch(input: { baseRef: string; cwd?: string 
   await git(["checkout", input.baseRef], { cwd: input.cwd })
   await git(["pull", "--ff-only", "origin", input.baseRef], { cwd: input.cwd })
   await configureBotGit(input.cwd)
-}
-
-export async function checkoutWorkBranch(input: { baseRef: string; workBranch: string; cwd?: string }): Promise<void> {
-  await checkoutBaseBranch({ baseRef: input.baseRef, cwd: input.cwd })
-  await git(["checkout", "-B", input.workBranch], { cwd: input.cwd })
 }
 
 export async function commitsAhead(input: { baseRef: string; cwd?: string }): Promise<number> {

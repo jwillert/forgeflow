@@ -10,11 +10,11 @@ You are on branch `{{BRANCH}}`, already created from `{{BASE_REF}}`.
 
 # CONTEXT
 
-Read the project's domain and architecture docs before changing code:
+Read the project's domain and architecture docs before changing code, if present:
 
-- `CONTEXT.md`
-- `docs/adr/` if relevant
-- `.sandcastle/CODING_STANDARDS.md` if present
+- `CONTEXT.md`, `CLAUDE.md`, or `README.md`
+- `docs/adr/` or similar architecture-decision records
+- Any coding standards file the repo points to
 
 Explore the repo and relevant tests before editing.
 
@@ -29,7 +29,7 @@ Where a test seam already exists, or a new one is being proposed, do red-green-r
 
 Do not improvise new test seams, such as extracting out a function so that it can be tested in isolation. This creates spaghetti tests.
 
-Run the project build/test command before committing. Use focused tests where relevant.
+Run this project's standard build/test command before committing (check `package.json` scripts, a `Makefile`, `CONTRIBUTING.md`, or `CLAUDE.md` for what that is). Use focused tests where relevant.
 
 # COMMIT
 

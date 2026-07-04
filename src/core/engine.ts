@@ -172,8 +172,10 @@ export class ForgeflowGateway {
     try {
       const result = await workflow.run({
         command,
+        workReader: target.workReader,
         workTracker: target.workTracker,
         codeHost: target.codeHost,
+        codeReviewHost: target.codeReviewHost,
         commandState: createCommandState(this.config.state, command.id),
         capabilities: { optional: <T>(name: string) => this.config.capabilities?.[name] as T | undefined },
       })

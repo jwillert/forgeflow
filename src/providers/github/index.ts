@@ -1,6 +1,19 @@
 import { defaultWorkBranch } from "../../core/workflow.js"
-import type { CodeHost, PollingEventSource, WorkTracker } from "../../core/capabilities.js"
-import type { AgentCommand, BranchRef, ChangeRequestRef, CheckoutSpec, CodeTargetRef, NormalizedEvent, WorkTargetRef, WorkTargetSnapshot } from "../../core/types.js"
+import type { CodeHost, CodeReviewHost, PollingEventSource, WorkTracker } from "../../core/capabilities.js"
+import type {
+  AgentCommand,
+  BranchRef,
+  ChangeRequestDetails,
+  ChangeRequestRef,
+  CheckoutSpec,
+  CodeTargetRef,
+  GeneralComment,
+  InlineReviewComment,
+  NormalizedEvent,
+  ReviewThread,
+  WorkTargetRef,
+  WorkTargetSnapshot,
+} from "../../core/types.js"
 
 export type GitHubOptions = { token: string; apiUrl?: string }
 
@@ -20,6 +33,7 @@ export function github(options: GitHubOptions) {
         workTracker: adapter,
         codeReader: adapter,
         codeHost: adapter,
+        codeReviewHost: adapter,
       }
     },
   }
@@ -46,8 +60,25 @@ class GitHubApi {
 
 type GhIssue = { number: number; title: string; body?: string; labels: Array<{ name: string }>; user?: { id: number; login: string }; html_url: string; updated_at: string; pull_request?: unknown }
 type GhComment = { id: number; body: string; html_url: string; created_at: string; user?: { id: number; login: string } }
+type GhPullRequest = {
+  number: number
+  node_id: string
+  html_url: string
+  title: string
+  body?: string | null
+  head: { ref: string; sha: string; repo?: { full_name: string } | null }
+  base: { ref: string }
+}
+type GhReview = { user?: { login: string } | null; body?: string | null; submitted_at?: string | null }
+type GraphQlThreadNode = {
+  id: string
+  isResolved: boolean
+  comments: { nodes: Array<{ id: string; databaseId: number; path?: string; line?: number; originalLine?: number; body: string; author?: { login: string } | null }> }
+}
 
-class GitHubRepoAdapter implements PollingEventSource, WorkTracker, CodeHost {
+const linkedIssueId = (body?: string | null): string | undefined => body?.match(/(?:closes|fixes|resolves)\s+#(\d+)/i)?.[1]
+
+class GitHubRepoAdapter implements PollingEventSource, WorkTracker, CodeHost, CodeReviewHost {
   readonly provider = "github"
   readonly targetId: string
   constructor(private api: GitHubApi, private repo: string, private baseBranch?: string) { this.targetId = repo }
@@ -132,9 +163,84 @@ class GitHubRepoAdapter implements PollingEventSource, WorkTracker, CodeHost {
   async openOrUpdateChangeRequest(input: { existing?: ChangeRequestRef; sourceBranch: BranchRef; targetBranch: string; title: string; body: string }): Promise<ChangeRequestRef> {
     if (input.existing) {
       const pr = await this.api.request<{ number: number; html_url: string }>(`/repos/${this.repo}/pulls/${input.existing.id}`, { method: "PATCH", body: JSON.stringify({ title: input.title, body: input.body }) })
-      return { provider: "github", id: String(pr.number), url: pr.html_url }
+      return { provider: "github", id: String(pr.number), url: pr.html_url, kind: "pull_request" }
     }
     const pr = await this.api.request<{ number: number; html_url: string }>(`/repos/${this.repo}/pulls`, { method: "POST", body: JSON.stringify({ title: input.title, body: input.body, head: input.sourceBranch.name, base: input.targetBranch }) })
-    return { provider: "github", id: String(pr.number), url: pr.html_url }
+    return { provider: "github", id: String(pr.number), url: pr.html_url, kind: "pull_request" }
+  }
+
+  async getChangeRequestDetails(target: WorkTargetRef): Promise<ChangeRequestDetails> {
+    const pr = await this.api.request<GhPullRequest>(`/repos/${this.repo}/pulls/${target.id}`)
+    return {
+      sourceBranch: pr.head.ref,
+      sourceSha: pr.head.sha,
+      targetBranch: pr.base.ref,
+      title: pr.title,
+      isCrossRepository: pr.head.repo?.full_name !== this.repo,
+      linkedIssueId: linkedIssueId(pr.body),
+    }
+  }
+
+  async listGeneralComments(target: WorkTargetRef): Promise<GeneralComment[]> {
+    const comments = await this.api.request<GhComment[]>(`/repos/${this.repo}/issues/${target.id}/comments?per_page=100`)
+    const general: GeneralComment[] = comments.map(c => ({ author: c.user?.login, body: c.body, createdAt: c.created_at }))
+    if (target.kind !== "pull_request") return general
+    const reviews = await this.api.request<GhReview[]>(`/repos/${this.repo}/pulls/${target.id}/reviews`)
+    const reviewSummaries = reviews
+      .filter(r => r.body && r.body.trim().length > 0)
+      .map(r => ({ author: r.user?.login, body: r.body as string, createdAt: r.submitted_at ?? undefined }))
+    return [...general, ...reviewSummaries]
+  }
+
+  async listReviewThreads(target: WorkTargetRef): Promise<ReviewThread[]> {
+    if (target.kind !== "pull_request") return []
+    const { owner, repo } = this.ownerRepo
+    const query = `query($owner:String!,$repo:String!,$number:Int!){ repository(owner:$owner,name:$repo){ pullRequest(number:$number){ reviewThreads(first:100){ nodes{ id isResolved comments(first:50){ nodes{ id databaseId path line originalLine body author{ login } } } } } } } }`
+    const result = await this.graphql<{ repository: { pullRequest: { reviewThreads: { nodes: GraphQlThreadNode[] } } } }>(query, { owner, repo, number: Number(target.id) })
+    return result.repository.pullRequest.reviewThreads.nodes
+      .filter(thread => !thread.isResolved)
+      .map(thread => ({
+        id: thread.id,
+        path: thread.comments.nodes[0]?.path,
+        line: thread.comments.nodes[0]?.line ?? thread.comments.nodes[0]?.originalLine,
+        isResolved: thread.isResolved,
+        comments: thread.comments.nodes.map(c => ({ id: c.id, author: c.author?.login, body: c.body })),
+      }))
+  }
+
+  async postReview(target: WorkTargetRef, input: { commitSha: string; summary: string; inlineComments: InlineReviewComment[] }): Promise<void> {
+    await this.api.request(`/repos/${this.repo}/pulls/${target.id}/reviews`, {
+      method: "POST",
+      body: JSON.stringify({
+        commit_id: input.commitSha,
+        event: "COMMENT",
+        body: input.summary,
+        comments: input.inlineComments.map(c => ({ path: c.path, line: c.line, side: "RIGHT", body: c.body })),
+      }),
+    })
+  }
+
+  async replyToThread(target: WorkTargetRef, input: { threadId: string; body: string }): Promise<void> {
+    const { owner, repo } = this.ownerRepo
+    const query = `query($id:ID!){ node(id:$id){ ... on PullRequestReviewThread { comments(last:1){ nodes{ databaseId } } } } }`
+    const result = await this.graphql<{ node?: { comments?: { nodes: Array<{ databaseId: number }> } } }>(query, { id: input.threadId })
+    const databaseId = result.node?.comments?.nodes[0]?.databaseId
+    if (!databaseId) throw new Error(`Could not resolve a replyable comment for thread ${input.threadId}`)
+    await this.api.request(`/repos/${owner}/${repo}/pulls/${target.id}/comments/${databaseId}/replies`, { method: "POST", body: JSON.stringify({ body: input.body }) })
+  }
+
+  async markReady(target: WorkTargetRef): Promise<void> {
+    const pr = await this.api.request<GhPullRequest>(`/repos/${this.repo}/pulls/${target.id}`)
+    await this.graphql(`mutation($id:ID!){ markPullRequestReadyForReview(input:{pullRequestId:$id}){ clientMutationId } }`, { id: pr.node_id })
+  }
+
+  private async graphql<T>(query: string, variables: Record<string, unknown>): Promise<T> {
+    const result = await this.api.request<{ data?: T; errors?: Array<{ message: string }> }>("/graphql", {
+      method: "POST",
+      body: JSON.stringify({ query, variables }),
+    })
+    if (result.errors?.length) throw new Error(`GitHub GraphQL error: ${result.errors.map(e => e.message).join("; ")}`)
+    if (!result.data) throw new Error("GitHub GraphQL response had no data")
+    return result.data
   }
 }

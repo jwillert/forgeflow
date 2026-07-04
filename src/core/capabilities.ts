@@ -1,9 +1,13 @@
 import type {
   AgentCommand,
+  ChangeRequestDetails,
   ChangeRequestRef,
   CheckoutSpec,
   CodeTargetRef,
   CommentRef,
+  GeneralComment,
+  InlineReviewComment,
+  ReviewThread,
   WorkTargetRef,
   WorkTargetSnapshot,
 } from "./types.js"
@@ -36,6 +40,20 @@ export interface CodeHost extends CodeReader {
     title: string
     body: string
   }): Promise<ChangeRequestRef>
+}
+
+/**
+ * Forge-agnostic surface for reviewing a change request (GitHub pull request /
+ * GitLab merge request) or discussing an issue. `listGeneralComments` works for
+ * any WorkTargetRef (issue or change request); the rest are change-request only.
+ */
+export interface CodeReviewHost {
+  getChangeRequestDetails(target: WorkTargetRef): Promise<ChangeRequestDetails>
+  listGeneralComments(target: WorkTargetRef): Promise<GeneralComment[]>
+  listReviewThreads(target: WorkTargetRef): Promise<ReviewThread[]>
+  postReview(target: WorkTargetRef, input: { commitSha: string; summary: string; inlineComments: InlineReviewComment[] }): Promise<void>
+  replyToThread(target: WorkTargetRef, input: { threadId: string; body: string }): Promise<void>
+  markReady(target: WorkTargetRef): Promise<void>
 }
 
 export interface CapabilityRegistry {
