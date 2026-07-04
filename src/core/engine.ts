@@ -6,6 +6,10 @@ import { defaultTrustPolicy } from "./config.js"
 
 function nowIso() { return new Date().toISOString() }
 
+function isActiveStatus(status: import("./types.js").AgentCommandStatus): boolean {
+  return status === "queued" || status === "deferred" || status === "running"
+}
+
 function workTargetKey(target: import("./types.js").WorkTargetRef): string {
   return `${target.provider}:${target.repo ?? target.project ?? ""}:${target.kind}:${target.id}`
 }
@@ -95,9 +99,21 @@ export class ForgeflowGateway {
         await this.config.state.markEventProcessed(event.id)
         return "rejected"
       }
-      if (await this.config.state.hasCommand(commandId)) {
+
+      const existing = await this.config.state.getCommand(commandId)
+      if (existing && isActiveStatus(existing.status)) {
         await this.config.state.markEventProcessed(event.id)
         return "ignored"
+      }
+      if (existing) {
+        // Prior run for this trigger reached a terminal state (succeeded/failed/rejected);
+        // re-queue it in place rather than creating a duplicate command with the same id.
+        await this.config.state.updateCommandStatus(commandId, decision.type === "defer" ? "deferred" : "queued", {
+          reason: decision.type === "defer" ? decision.reason : undefined,
+          nextCheckAt: decision.type === "defer" ? decision.nextCheckAt ?? addInterval(new Date(), this.config.defaultDeferInterval).toString() : undefined,
+        })
+        await this.config.state.markEventProcessed(event.id)
+        return decision.type === "defer" ? "deferred" : "accepted"
       }
 
       const snapshot = await target.workReader.getTarget(event.workTarget).catch(() => undefined)
