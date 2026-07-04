@@ -10,12 +10,16 @@ export async function configureBotGit(cwd?: string): Promise<void> {
   await git(["config", "user.email", "forgeflow[bot]@users.noreply.github.com"], { cwd })
 }
 
-export async function checkoutWorkBranch(input: { baseRef: string; workBranch: string; cwd?: string }): Promise<void> {
+export async function checkoutBaseBranch(input: { baseRef: string; cwd?: string }): Promise<void> {
   await git(["fetch", "origin", `${input.baseRef}:${input.baseRef}`], { cwd: input.cwd }).catch(() => git(["fetch", "origin", input.baseRef], { cwd: input.cwd }))
   await git(["checkout", input.baseRef], { cwd: input.cwd })
   await git(["pull", "--ff-only", "origin", input.baseRef], { cwd: input.cwd })
-  await git(["checkout", "-B", input.workBranch], { cwd: input.cwd })
   await configureBotGit(input.cwd)
+}
+
+export async function checkoutWorkBranch(input: { baseRef: string; workBranch: string; cwd?: string }): Promise<void> {
+  await checkoutBaseBranch({ baseRef: input.baseRef, cwd: input.cwd })
+  await git(["checkout", "-B", input.workBranch], { cwd: input.cwd })
 }
 
 export async function commitsAhead(input: { baseRef: string; cwd?: string }): Promise<number> {

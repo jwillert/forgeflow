@@ -1,5 +1,8 @@
+import { config as loadEnv } from "dotenv"
 import { createEnvReader, createGateway } from "forgeflow"
 import configFactory from "./forgeflow.config.js"
+
+loadEnv({ path: ".forgeflow/.env" })
 
 const config = await configFactory({ env: createEnvReader() })
 const gateway = createGateway(config)

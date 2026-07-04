@@ -4,11 +4,16 @@ dist/
 
 .env
 .env.*
+**/.env
+**/.env.*
 !.env.example
+!**/.env.example
 
 *.db
 *.db-shm
 *.db-wal
 
 .forgeflow/output/
+.sandcastle/logs/
+.sandcastle/worktrees/
 .DS_Store

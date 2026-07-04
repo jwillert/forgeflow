@@ -1,9 +1,9 @@
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { defineWorkflow, labelAdded, Match, type WorkTargetRef } from "forgeflow"
-import { checkoutWorkBranch, commitsAhead, pushBranch } from "../shared/git.js"
+import { checkoutBaseBranch, commitsAhead, pushBranch } from "../shared/git.js"
 import { optionalEnv } from "../shared/shell.js"
-import { runPodmanSandcastle } from "../shared/sandcastle.js"
+import { createPodmanSandbox, piAgent } from "../shared/sandcastle.js"
 
 const here = dirname(fileURLToPath(import.meta.url))
 const promptFile = join(here, "../prompts/implement.md")
@@ -35,17 +35,16 @@ export const implement = defineWorkflow("implement", {
     try {
       const checkout = await codeHost.resolveCheckout(command.codeTarget, command)
 
-      await checkoutWorkBranch({
-        baseRef: checkout.baseRef,
-        workBranch: checkout.workBranch,
-      })
+      await checkoutBaseBranch({ baseRef: checkout.baseRef })
 
-      const result = await runPodmanSandcastle({
-        name: `implement-#${issueNumber}`,
+      await using sandbox = await createPodmanSandbox({
         branch: checkout.workBranch,
-        promptFile,
-        idleTimeoutSeconds: 900,
         preflightCommand: process.env.FORGEFLOW_SANDBOX_PREFLIGHT ?? undefined,
+      })
+      const result = await sandbox.run({
+        name: `implement-#${issueNumber}`,
+        agent: piAgent(),
+        promptFile,
         promptArgs: {
           ISSUE_NUMBER: issueNumber,
           ISSUE_TITLE: command.title,
@@ -53,14 +52,15 @@ export const implement = defineWorkflow("implement", {
           BRANCH: checkout.workBranch,
           BASE_REF: checkout.baseRef,
         },
+        idleTimeoutSeconds: 900,
       })
 
-      const count = await commitsAhead({ baseRef: checkout.baseRef })
+      const count = await commitsAhead({ baseRef: checkout.baseRef, cwd: sandbox.worktreePath })
       if ((!Number.isFinite(count) || count === 0) && result.commits.length === 0) {
         await markFailed("Agent finished but no commits were made on the branch.")
       }
 
-      await pushBranch({ branch: checkout.workBranch })
+      await pushBranch({ branch: checkout.workBranch, cwd: sandbox.worktreePath })
 
       const existing = await commandState.getLinkedChangeRequest()
       const changeRequest = await codeHost.openOrUpdateChangeRequest({

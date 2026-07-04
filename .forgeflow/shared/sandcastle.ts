@@ -23,7 +23,7 @@ export async function createPodmanSandbox(input: {
   preflightCommand?: string
   preflightTimeoutMs?: number
 }) {
-  await using sandbox = await sandcastle.createSandbox({
+  return await sandcastle.createSandbox({
     sandbox: sandboxProvider,
     branch: input.branch,
     hooks: input.preflightCommand
@@ -39,8 +39,6 @@ export async function createPodmanSandbox(input: {
         }
       : undefined,
   })
-
-  return sandbox
 }
 
 export async function runPodmanSandcastle(input: {
