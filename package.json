@@ -15,7 +15,7 @@
     "./workflows": "./dist/workflows/index.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/copy-workflow-prompts.mjs",
+    "build": "tsc -p tsconfig.json && node scripts/copy-assets.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --test dist/**/*.test.js",
     "forgeflow:once": ".forgeflow/run-once.sh",
