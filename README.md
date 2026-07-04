@@ -4,6 +4,8 @@ Forgeflow externalizes repository workflows that would otherwise live inside Git
 
 The workflow can call anything: Sandcastle scripts, shell commands, local tools, Hermes, build scripts, or provider CLIs.
 
+Build the package with `npm run build`.
+
 ## MVP commands
 
 ```bash
