@@ -14,6 +14,7 @@ dist/
 *.db-wal
 
 .forgeflow/output/
+.forgeflow/*.lock
 .sandcastle/logs/
 .sandcastle/worktrees/
 .DS_Store

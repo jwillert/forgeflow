@@ -2,6 +2,7 @@ import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { defineWorkflow, labelAdded, Match, type WorkTargetRef } from "forgeflow"
 import { checkoutBaseBranch, commitsAhead, pushBranch } from "../shared/git.js"
+import { gh } from "../shared/github.js"
 import { optionalEnv } from "../shared/shell.js"
 import { createPodmanSandbox, piAgent } from "../shared/sandcastle.js"
 
@@ -37,6 +38,9 @@ export const implement = defineWorkflow("implement", {
 
       await checkoutBaseBranch({ baseRef: checkout.baseRef })
 
+      const issueContext = await gh(["issue", "view", issueNumber, "--comments"])
+        .catch(() => command.body ?? `Issue #${issueNumber}: ${command.title}`)
+
       await using sandbox = await createPodmanSandbox({
         branch: checkout.workBranch,
         preflightCommand: process.env.FORGEFLOW_SANDBOX_PREFLIGHT ?? undefined,
@@ -48,7 +52,7 @@ export const implement = defineWorkflow("implement", {
         promptArgs: {
           ISSUE_NUMBER: issueNumber,
           ISSUE_TITLE: command.title,
-          ISSUE_CONTEXT: command.body ?? `Issue #${issueNumber}: ${command.title}`,
+          ISSUE_CONTEXT: issueContext,
           BRANCH: checkout.workBranch,
           BASE_REF: checkout.baseRef,
         },
