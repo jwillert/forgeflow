@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.idea/
+
+.env
+.env.*
+!.env.example
+
+*.db
+*.db-shm
+*.db-wal
+
+.forgeflow/output/
+.DS_Store

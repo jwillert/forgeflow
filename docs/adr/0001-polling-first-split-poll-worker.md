@@ -1,0 +1,3 @@
+# Polling-first Gateway with split poll and worker execution
+
+The Agent Workflow Gateway starts as a polling-only system and separates event ingestion from command execution: `poll` discovers provider events, applies trust and workflow matching, queues Agent Commands, then exits; `worker` claims queued commands and runs workflows. We chose this over webhook-first or CI-runner execution because Hermes is internal-only, public runners should not be placed on the private network, and agent execution can be long-running; polling plus a split worker model keeps deployment simple, avoids blocked CI runners, and preserves a future path to webhooks as a fast path.
