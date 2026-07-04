@@ -99,9 +99,13 @@ export async function runSandboxWithExtraction<T>(input: {
     promptArgs: input.promptArgs,
     idleTimeoutSeconds: input.idleTimeoutSeconds ?? 900,
   })
-  if (!produce.resume) throw new Error("Cannot extract structured output because sandbox run cannot resume the agent session.")
-  const extraction = await produce.resume(input.extractionPrompt, {
+  const sessionId = produce.iterations.at(-1)?.sessionId
+  if (!sessionId) throw new Error("Cannot extract structured output because the produce run had no session id.")
+  const extraction = await input.sandbox.run({
     name: `${input.name} (extract)`,
+    agent: piAgent(),
+    prompt: input.extractionPrompt,
+    resumeSession: sessionId,
     idleTimeoutSeconds: 300,
   })
   const match = extraction.stdout.match(/<output>\s*([\s\S]*?)\s*<\/output>/)

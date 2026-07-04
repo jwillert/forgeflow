@@ -81,7 +81,7 @@ export const filterInlineComments = (comments: readonly InlineComment[], diffLin
 export const filterReplies = (replies: readonly ThreadReply[], validReplyIds: Set<string>): ThreadReply[] =>
   replies.filter(reply => validReplyIds.has(reply.commentId))
 
-export async function fetchPullRequestContext(prNumber: string): Promise<{
+export async function fetchPullRequestContext(prNumber: string, options: { cwd?: string } = {}): Promise<{
   prTitle: string
   issueNumber: string
   issueTitle: string
@@ -115,6 +115,6 @@ export async function fetchPullRequestContext(prNumber: string): Promise<{
     review_summaries: reviews.filter(review => review.body && review.body.trim().length > 0).map(review => ({ author: review.user?.login ?? "unknown", state: review.state, body: review.body, submittedAt: review.submitted_at })),
     review_threads: reviewThreads,
   }
-  const diff = await git(["diff", "main...HEAD"]).catch(() => git(["diff", "main..HEAD"]))
+  const diff = await git(["diff", "main...HEAD"], { cwd: options.cwd }).catch(() => git(["diff", "main..HEAD"], { cwd: options.cwd }))
   return { prTitle: prView.title, issueNumber, issueTitle, linkedIssue, diff, prCommentsJson: JSON.stringify(prComments, null, 2), diffLines: parseDiffLines(diff), validReplyIds: new Set(reviewThreads.map((comment: any) => comment.commentId)) }
 }

@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url"
 import { mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { defineWorkflow, labelAdded, Match } from "forgeflow"
-import { checkoutWorkBranch, git, pushBranch } from "../shared/git.js"
+import { git, pushBranch } from "../shared/git.js"
 import { addPrLabel, commentPr, gh, ghJson, removePrLabel } from "../shared/github.js"
 import { optionalEnv } from "../shared/shell.js"
 import { createPodmanSandbox, runSandboxWithExtraction } from "../shared/sandcastle.js"
@@ -43,15 +43,13 @@ export const review = defineWorkflow("review", {
       await removePrLabel(prNumber, "agent:blocked")
       await addPrLabel(prNumber, "agent:in-progress")
 
-      await git(["fetch", "origin", pr.headRefName])
-      await checkoutWorkBranch({ baseRef: pr.baseRefName, workBranch: pr.headRefName })
-      await git(["reset", "--hard", pr.headRefOid])
-
       await using sandbox = await createPodmanSandbox({
         branch: pr.headRefName,
         preflightCommand: process.env.FORGEFLOW_SANDBOX_PREFLIGHT ?? undefined,
       })
-      const context = await fetchPullRequestContext(prNumber)
+      await git(["fetch", "origin", pr.baseRefName], { cwd: sandbox.worktreePath })
+      await git(["reset", "--hard", pr.headRefOid], { cwd: sandbox.worktreePath })
+      const context = await fetchPullRequestContext(prNumber, { cwd: sandbox.worktreePath })
       const result = await runSandboxWithExtraction({
         sandbox,
         name: `review-pr-${prNumber}`,

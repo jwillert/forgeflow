@@ -3,6 +3,7 @@ import { createEnvReader, createGateway } from "forgeflow"
 import configFactory from "./forgeflow.config.js"
 
 loadEnv({ path: ".forgeflow/.env" })
+process.env.GH_REPO ??= process.env.FORGEFLOW_GITHUB_REPO
 
 const config = await configFactory({ env: createEnvReader() })
 const gateway = createGateway(config)
