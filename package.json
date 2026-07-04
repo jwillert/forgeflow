@@ -17,6 +17,8 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --test dist/**/*.test.js",
+    "forgeflow:once": ".forgeflow/run-once.sh",
+    "forgeflow:drain": ".forgeflow/drain.sh",
     "prepare": "npm run build"
   },
   "dependencies": {

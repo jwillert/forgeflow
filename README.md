@@ -32,10 +32,16 @@ const result = await gateway.runOnce({
 console.log(result)
 ```
 
-Then run:
+Then run once:
 
 ```bash
-npx tsx .forgeflow/run.ts
+npm run forgeflow:once
+```
+
+Or drain until idle:
+
+```bash
+npm run forgeflow:drain
 ```
 
 ## Config shape
