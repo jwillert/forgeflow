@@ -38,7 +38,7 @@ Then run once:
 npm run forgeflow:once
 ```
 
-Or drain until idle:
+Or run Forgeflow until idle:
 
 ```bash
 npm run forgeflow:drain
