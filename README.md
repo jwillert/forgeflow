@@ -32,7 +32,7 @@ const result = await gateway.runOnce({
 console.log(result)
 ```
 
-Then run the project-local Forgeflow workflow:
+Then run the project-local Forgeflow runner script:
 
 ```bash
 npx tsx .forgeflow/run.ts
