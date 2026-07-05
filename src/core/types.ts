@@ -1,5 +1,5 @@
 export type ProviderId = string
-export type TargetKind = "issue" | "pull_request" | "merge_request" | "project" | "repo"
+export type TargetKind = "issue" | "pull_request" | "merge_request" | "project" | "repo" | "tag"
 
 export type WorkTargetRef = {
   provider: ProviderId
@@ -27,12 +27,13 @@ export type NormalizedEvent = {
   provider: ProviderId
   source: "poll" | "webhook"
   provenance: "historical" | "synthetic"
-  kind: "label_added" | "label_removed" | "comment_created" | "comment_command" | "target_updated" | "target_opened"
+  kind: "label_added" | "label_removed" | "comment_created" | "comment_command" | "target_updated" | "target_opened" | "tag_created"
   workTarget: WorkTargetRef
   actor?: ActorRef
   label?: string
   comment?: { id: string; body: string; url?: string }
   command?: string
+  tag?: string
   occurredAt: string
   observedAt: string
   raw?: unknown

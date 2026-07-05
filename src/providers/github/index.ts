@@ -81,6 +81,18 @@ const linkedIssueId = (body?: string | null): string | undefined => body?.match(
 const parseBlockedByIds = (body?: string | null): string[] =>
   Array.from(body?.matchAll(/(?:blocked by|depends on)\s+#(\d+)/gi) ?? [], m => m[1])
 
+type PollCursorData = { since?: string; seenTags?: string[] }
+
+/** Cursor value is JSON-encoded so it can carry both the issues "since" timestamp and the tag baseline. Falls back to treating a bare string as `since` for cursors stored before tag support was added. */
+function parsePollCursor(raw?: string): PollCursorData {
+  if (!raw) return {}
+  try { return JSON.parse(raw) as PollCursorData } catch { return { since: raw } }
+}
+
+function serializePollCursor(data: PollCursorData): string {
+  return JSON.stringify(data)
+}
+
 class GitHubRepoAdapter implements PollingEventSource, WorkTracker, CodeHost, CodeReviewHost {
   readonly provider = "github"
   readonly targetId: string
@@ -88,7 +100,8 @@ class GitHubRepoAdapter implements PollingEventSource, WorkTracker, CodeHost, Co
   private get ownerRepo() { const [owner, repo] = this.repo.split("/"); return { owner, repo } }
 
   async poll(input: { cursor?: { value?: string }; maxEvents: number }) {
-    const since = input.cursor?.value
+    const cursorData = parsePollCursor(input.cursor?.value)
+    const since = cursorData.since
     const q = new URLSearchParams({ state: "open", per_page: String(Math.min(input.maxEvents, 100)), sort: "updated", direction: "asc" })
     if (since) q.set("since", since)
     const issues = await this.api.request<GhIssue[]>(`/repos/${this.repo}/issues?${q}`)
@@ -131,7 +144,31 @@ class GitHubRepoAdapter implements PollingEventSource, WorkTracker, CodeHost, Co
       if (events.length >= input.maxEvents) break
     }
     const last = issues.at(-1)?.updated_at
-    return { events, nextCursor: { value: last ?? since ?? now } }
+
+    const seenTags = new Set(cursorData.seenTags ?? [])
+    const isFirstEverPoll = input.cursor === undefined
+    if (events.length < input.maxEvents) {
+      const tags = await this.api.request<Array<{ name: string; commit: { sha: string } }>>(`/repos/${this.repo}/tags?per_page=100`)
+      for (const tag of tags) {
+        if (seenTags.has(tag.name)) continue
+        if (!isFirstEverPoll && events.length < input.maxEvents) {
+          events.push({
+            id: `github:${this.repo}:tag:${tag.name}`,
+            provider: "github",
+            source: "poll",
+            provenance: "synthetic",
+            kind: "tag_created",
+            workTarget: { provider: "github", repo: this.repo, kind: "tag", id: tag.name, url: `https://github.com/${this.repo}/releases/tag/${tag.name}` },
+            tag: tag.name,
+            occurredAt: now,
+            observedAt: now,
+          })
+        }
+        seenTags.add(tag.name)
+      }
+    }
+
+    return { events, nextCursor: { value: serializePollCursor({ since: last ?? since ?? now, seenTags: [...seenTags] }) } }
   }
 
   async getTarget(target: WorkTargetRef): Promise<WorkTargetSnapshot> {

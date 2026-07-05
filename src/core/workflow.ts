@@ -60,6 +60,12 @@ export function isChangeRequestKind(kind: TargetKind): boolean {
   return kind === "pull_request" || kind === "merge_request"
 }
 
+/** True when a new tag was pushed, optionally filtered to tag names matching `pattern` (e.g. /^v/). */
+export function tagCreated(event: NormalizedEvent, pattern?: RegExp): boolean {
+  if (event.kind !== "tag_created" || !event.tag) return false
+  return pattern ? pattern.test(event.tag) : true
+}
+
 export function defaultCommandId(input: { event: NormalizedEvent; workflowId: string }): string {
   const t = input.event.workTarget
   const trigger = input.event.kind === "label_added" ? `label:${input.event.label}` : input.event.kind

@@ -82,6 +82,18 @@ const noteScope = (kind: TargetKind): "issues" | "merge_requests" => kind === "m
 
 const normalizeState = (state: "opened" | "closed" | "merged" | "locked"): "open" | "closed" => state === "opened" ? "open" : "closed"
 
+type PollCursorData = { since?: string; seenTags?: string[] }
+
+/** Cursor value is JSON-encoded so it can carry both the issues/MRs "since" timestamp and the tag baseline. Falls back to treating a bare string as `since` for cursors stored before tag support was added. */
+function parsePollCursor(raw?: string): PollCursorData {
+  if (!raw) return {}
+  try { return JSON.parse(raw) as PollCursorData } catch { return { since: raw } }
+}
+
+function serializePollCursor(data: PollCursorData): string {
+  return JSON.stringify(data)
+}
+
 class GitLabProjectAdapter implements PollingEventSource, WorkTracker, CodeHost, CodeReviewHost {
   readonly provider = "gitlab"
   readonly targetId: string
@@ -133,8 +145,9 @@ class GitLabProjectAdapter implements PollingEventSource, WorkTracker, CodeHost,
       }
     }
 
+    const cursorData = parsePollCursor(input.cursor?.value)
     const q = new URLSearchParams({ state: "opened", per_page: String(Math.min(input.maxEvents, 100)), order_by: "updated_at", sort: "asc" })
-    if (input.cursor?.value) q.set("updated_after", input.cursor.value)
+    if (cursorData.since) q.set("updated_after", cursorData.since)
 
     const issues = await this.api.request<GlIssue[]>(`/projects/${this.encoded}/issues?${q}`)
     await collect("issue", issues)
@@ -143,7 +156,30 @@ class GitLabProjectAdapter implements PollingEventSource, WorkTracker, CodeHost,
       await collect("merge_request", mergeRequests)
     }
 
-    return { events, nextCursor: { value: latestUpdatedAt ?? input.cursor?.value ?? now } }
+    const seenTags = new Set(cursorData.seenTags ?? [])
+    const isFirstEverPoll = input.cursor === undefined
+    if (events.length < input.maxEvents) {
+      const tags = await this.api.request<Array<{ name: string; commit: { id: string } }>>(`/projects/${this.encoded}/repository/tags?per_page=100`)
+      for (const tag of tags) {
+        if (seenTags.has(tag.name)) continue
+        if (!isFirstEverPoll && events.length < input.maxEvents) {
+          events.push({
+            id: `gitlab:${this.project}:tag:${tag.name}`,
+            provider: "gitlab",
+            source: "poll",
+            provenance: "synthetic",
+            kind: "tag_created",
+            workTarget: { provider: "gitlab", project: this.project, repo: this.project, kind: "tag", id: tag.name },
+            tag: tag.name,
+            occurredAt: now,
+            observedAt: now,
+          })
+        }
+        seenTags.add(tag.name)
+      }
+    }
+
+    return { events, nextCursor: { value: serializePollCursor({ since: latestUpdatedAt ?? cursorData.since ?? now, seenTags: [...seenTags] }) } }
   }
 
   async getTarget(target: WorkTargetRef): Promise<WorkTargetSnapshot> {
