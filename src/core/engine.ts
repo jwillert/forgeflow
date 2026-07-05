@@ -58,13 +58,50 @@ export class ForgeflowGateway {
       const due = await this.config.state.listDueDeferred(nowIso(), budget)
       for (const command of due) {
         budget--
-        // MVP requeues deferred commands on due time. Match re-evaluation can become richer later.
-        await this.config.state.updateCommandStatus(command.id, "queued")
-        commands++
+        const outcome = await this.recheckDeferred(command)
+        if (outcome === "queued") commands++
+        if (outcome === "deferred") deferred++
+        if (outcome === "rejected") rejected++
       }
     }
 
     return { events: eventsSeen, commands, deferred, rejected }
+  }
+
+  /** Re-runs match() for a deferred command against its original triggering event, so a still-blocked condition reschedules instead of blindly proceeding. */
+  private async recheckDeferred(command: AgentCommand): Promise<"queued" | "deferred" | "rejected"> {
+    const target = this.findTargetForCommand(command)
+    const workflow = target?.workflows.find(w => w.id === command.workflowId)
+    if (!target || !workflow) {
+      await this.config.state.updateCommandStatus(command.id, "failed", { reason: "No enabled target/workflow found" })
+      return "rejected"
+    }
+
+    const decision = await workflow.match({
+      event: command.triggerEvent,
+      workReader: target.workReader,
+      codeReader: target.codeReader,
+      state: this.config.state,
+      trustPolicy: this.config.trustPolicy ?? defaultTrustPolicy(),
+    })
+
+    if (decision.type === "ignore") {
+      await this.config.state.updateCommandStatus(command.id, "rejected", { reason: "No longer applicable on recheck" })
+      return "rejected"
+    }
+    if (decision.type === "reject") {
+      await this.config.state.updateCommandStatus(command.id, "rejected", { reason: decision.reason })
+      return "rejected"
+    }
+    if (decision.type === "defer") {
+      await this.config.state.updateCommandStatus(command.id, "deferred", {
+        reason: decision.reason,
+        nextCheckAt: decision.nextCheckAt ?? addInterval(new Date(), this.config.defaultDeferInterval).toString(),
+      })
+      return "deferred"
+    }
+    await this.config.state.updateCommandStatus(command.id, "queued")
+    return "queued"
   }
 
   private async handleEvent(target: EnabledTarget, event: NormalizedEvent): Promise<"ignored" | "accepted" | "deferred" | "rejected"> {

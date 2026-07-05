@@ -20,6 +20,8 @@ export interface PollingEventSource {
 
 export interface WorkReader {
   getTarget(target: WorkTargetRef): Promise<WorkTargetSnapshot>
+  /** Other issues/change requests that block this target from proceeding (native forge relationships and/or a "Blocked by #N" text convention in the body). */
+  listBlockingIssues(target: WorkTargetRef): Promise<WorkTargetRef[]>
 }
 
 export interface WorkTracker extends WorkReader {

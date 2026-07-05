@@ -27,9 +27,18 @@ export function createImplementWorkflow(options: ImplementWorkflowOptions = {}):
   const promptFile = options.promptFile ?? defaultPromptFile
 
   return defineWorkflow(options.id ?? "implement", {
-    match: ({ event }) => {
+    match: async ({ event, workReader }) => {
       if (!labelAdded(event, triggerLabel)) return Match.ignore()
       if (event.workTarget.kind !== "issue") return Match.ignore()
+
+      const blockers = await workReader.listBlockingIssues(event.workTarget).catch(() => [])
+      const openBlockerIds: string[] = []
+      for (const blocker of blockers) {
+        const snapshot = await workReader.getTarget(blocker).catch(() => undefined)
+        if (snapshot?.state !== "closed") openBlockerIds.push(blocker.id)
+      }
+      if (openBlockerIds.length > 0) return Match.defer(`Blocked by #${openBlockerIds.join(", #")}`)
+
       return Match.accept()
     },
 

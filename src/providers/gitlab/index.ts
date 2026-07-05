@@ -51,7 +51,7 @@ class GitLabApi {
   }
 }
 
-type GlIssue = { iid: number; title: string; description?: string; labels: string[]; author?: { id: number; username: string }; web_url: string; updated_at: string }
+type GlIssue = { iid: number; title: string; description?: string; labels: string[]; author?: { id: number; username: string }; web_url: string; updated_at: string; state: "opened" | "closed" }
 type GlNote = { id: number; body: string; created_at: string; author?: { id: number; username: string }; system?: boolean }
 type GlMergeRequest = {
   iid: number
@@ -61,6 +61,7 @@ type GlMergeRequest = {
   author?: { id: number; username: string }
   web_url: string
   updated_at: string
+  state: "opened" | "closed" | "merged" | "locked"
   source_branch: string
   target_branch: string
   sha: string
@@ -70,10 +71,16 @@ type GlMergeRequest = {
 }
 type GlDiscussionNote = { id: number; body: string; system?: boolean; resolvable?: boolean; resolved?: boolean; author?: { username: string } }
 type GlDiscussion = { id: string; notes: GlDiscussionNote[] }
+type GlIssueLink = { iid: number; link_type: "relates_to" | "blocks" | "is_blocked_by" }
 
 const linkedIssueId = (body?: string | null): string | undefined => body?.match(/(?:closes|fixes|resolves)\s+#(\d+)/i)?.[1]
 
+const parseBlockedByIds = (body?: string | null): string[] =>
+  Array.from(body?.matchAll(/(?:blocked by|depends on)\s+#(\d+)/gi) ?? [], m => m[1])
+
 const noteScope = (kind: TargetKind): "issues" | "merge_requests" => kind === "merge_request" ? "merge_requests" : "issues"
+
+const normalizeState = (state: "opened" | "closed" | "merged" | "locked"): "open" | "closed" => state === "opened" ? "open" : "closed"
 
 class GitLabProjectAdapter implements PollingEventSource, WorkTracker, CodeHost, CodeReviewHost {
   readonly provider = "gitlab"
@@ -142,10 +149,24 @@ class GitLabProjectAdapter implements PollingEventSource, WorkTracker, CodeHost,
   async getTarget(target: WorkTargetRef): Promise<WorkTargetSnapshot> {
     if (target.kind === "merge_request") {
       const mr = await this.api.request<GlMergeRequest>(`/projects/${this.encoded}/merge_requests/${target.id}`)
-      return { target, title: mr.title, body: mr.description ?? undefined, labels: mr.labels, author: mr.author ? { provider: "gitlab", id: String(mr.author.id), login: mr.author.username } : undefined, url: mr.web_url, updatedAt: mr.updated_at }
+      return { target, title: mr.title, body: mr.description ?? undefined, labels: mr.labels, author: mr.author ? { provider: "gitlab", id: String(mr.author.id), login: mr.author.username } : undefined, url: mr.web_url, updatedAt: mr.updated_at, state: normalizeState(mr.state) }
     }
     const issue = await this.api.request<GlIssue>(`/projects/${this.encoded}/issues/${target.id}`)
-    return { target, title: issue.title, body: issue.description, labels: issue.labels, author: issue.author ? { provider: "gitlab", id: String(issue.author.id), login: issue.author.username } : undefined, url: issue.web_url, updatedAt: issue.updated_at }
+    return { target, title: issue.title, body: issue.description, labels: issue.labels, author: issue.author ? { provider: "gitlab", id: String(issue.author.id), login: issue.author.username } : undefined, url: issue.web_url, updatedAt: issue.updated_at, state: normalizeState(issue.state) }
+  }
+
+  async listBlockingIssues(target: WorkTargetRef): Promise<WorkTargetRef[]> {
+    const snapshot = await this.getTarget(target).catch(() => undefined)
+    const textBlocked = parseBlockedByIds(snapshot?.body)
+
+    let nativeBlocked: string[] = []
+    if (target.kind !== "merge_request") {
+      const links = await this.api.request<GlIssueLink[]>(`/projects/${this.encoded}/issues/${target.id}/links`).catch(() => [])
+      nativeBlocked = links.filter(l => l.link_type === "is_blocked_by").map(l => String(l.iid))
+    }
+
+    const ids = new Set([...textBlocked, ...nativeBlocked])
+    return [...ids].map(id => ({ provider: "gitlab", project: this.project, repo: this.project, kind: "issue" as const, id }))
   }
 
   async addLabel(target: WorkTargetRef, label: string) {

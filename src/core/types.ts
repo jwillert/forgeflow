@@ -53,6 +53,7 @@ export type WorkTargetSnapshot = {
   author?: ActorRef
   url?: string
   updatedAt?: string
+  state?: "open" | "closed"
 }
 
 export type CheckoutSpec = {

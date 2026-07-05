@@ -58,7 +58,7 @@ class GitHubApi {
   }
 }
 
-type GhIssue = { number: number; title: string; body?: string; labels: Array<{ name: string }>; user?: { id: number; login: string }; html_url: string; updated_at: string; pull_request?: unknown }
+type GhIssue = { number: number; title: string; body?: string; labels: Array<{ name: string }>; user?: { id: number; login: string }; html_url: string; updated_at: string; state: "open" | "closed"; pull_request?: unknown }
 type GhComment = { id: number; body: string; html_url: string; created_at: string; user?: { id: number; login: string } }
 type GhPullRequest = {
   number: number
@@ -77,6 +77,9 @@ type GraphQlThreadNode = {
 }
 
 const linkedIssueId = (body?: string | null): string | undefined => body?.match(/(?:closes|fixes|resolves)\s+#(\d+)/i)?.[1]
+
+const parseBlockedByIds = (body?: string | null): string[] =>
+  Array.from(body?.matchAll(/(?:blocked by|depends on)\s+#(\d+)/gi) ?? [], m => m[1])
 
 class GitHubRepoAdapter implements PollingEventSource, WorkTracker, CodeHost, CodeReviewHost {
   readonly provider = "github"
@@ -141,7 +144,21 @@ class GitHubRepoAdapter implements PollingEventSource, WorkTracker, CodeHost, Co
       author: issue.user ? { provider: "github", id: String(issue.user.id), login: issue.user.login } : undefined,
       url: issue.html_url,
       updatedAt: issue.updated_at,
+      state: issue.state,
     }
+  }
+
+  async listBlockingIssues(target: WorkTargetRef): Promise<WorkTargetRef[]> {
+    const issue = await this.api.request<GhIssue>(`/repos/${this.repo}/issues/${target.id}`)
+    const textBlocked = parseBlockedByIds(issue.body)
+
+    const { owner, repo } = this.ownerRepo
+    const query = `query($owner:String!,$repo:String!,$number:Int!){ repository(owner:$owner,name:$repo){ issue(number:$number){ blockedBy(first:50){ nodes{ number } } } } }`
+    const result = await this.graphql<{ repository: { issue: { blockedBy: { nodes: Array<{ number: number }> } } } }>(query, { owner, repo, number: Number(target.id) })
+    const nativeBlocked = result.repository.issue.blockedBy.nodes.map(n => String(n.number))
+
+    const ids = new Set([...textBlocked, ...nativeBlocked])
+    return [...ids].map(id => ({ provider: "github", repo: this.repo, kind: "issue" as const, id }))
   }
 
   async addLabel(target: WorkTargetRef, label: string) {
