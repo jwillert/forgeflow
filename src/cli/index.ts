@@ -118,9 +118,10 @@ program.command("init")
     for (const path of written) console.log(`created  ${path}`)
     for (const path of skipped) console.log(`skipped  ${path} (already exists, use --force to overwrite)`)
     console.log(`\nNext steps:
-  1. cp ${opts.dir}/.env.example ${opts.dir}/.env and fill in your access token
-  2. bash ${opts.dir}/build-image.sh
-  3. npx forgeflow run --config ${opts.dir}/forgeflow.config.ts`)
+  1. npm install (picks up the @ai-hero/sandcastle dependency this just added)
+  2. cp ${opts.dir}/.env.example ${opts.dir}/.env and fill in your access token
+  3. bash ${opts.dir}/build-image.sh
+  4. npx forgeflow run --config ${opts.dir}/forgeflow.config.ts`)
   })
 
 await program.parseAsync(process.argv)

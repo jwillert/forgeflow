@@ -66,29 +66,47 @@ function configTemplate(options: Required<Pick<InitOptions, "provider" | "repo" 
   return `import { readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
-import { defineConfig } from "@jwillert/forgeflow"
+import { docker } from "@ai-hero/sandcastle/sandboxes/docker"
+import { podman } from "@ai-hero/sandcastle/sandboxes/podman"
+import { defineConfig, type EnvReader } from "@jwillert/forgeflow"
 ${providerImport}
 import { sqliteState } from "@jwillert/forgeflow/sqlite"
-import { createImplementWorkflow, createReviewWorkflow, createUpdateBranchWorkflow } from "@jwillert/forgeflow/workflows"
+import { createImplementWorkflow, createReviewWorkflow, createUpdateBranchWorkflow, piAgentAuthMount } from "@jwillert/forgeflow/workflows"
 
 const here = dirname(fileURLToPath(import.meta.url))
 
 // Prompts below were copied from forgeflow/workflows by \`forgeflow init\` — edit
 // freely, or delete the promptFile/extractionPrompt overrides to fall back to
 // the package's bundled defaults.
-const implement = createImplementWorkflow({
-  promptFile: join(here, "prompts/implement.md"),
-})
-const review = createReviewWorkflow({
-  promptFile: join(here, "prompts/review/prompt.md"),
-  extractionPrompt: readFileSync(join(here, "prompts/review/extraction.md"), "utf8"),
-})
-const updateBranch = createUpdateBranchWorkflow({
-  promptFile: join(here, "prompts/update-branch/prompt.md"),
-  extractionPrompt: readFileSync(join(here, "prompts/update-branch/extraction.md"), "utf8"),
-})
+
+// Podman by default; set FORGEFLOW_SANDBOX_RUNTIME=docker to use Docker instead.
+function buildSandboxProvider(env: EnvReader) {
+  const runtime = env.optional("FORGEFLOW_SANDBOX_RUNTIME", "podman")
+  const imageName = env.optional("FORGEFLOW_SANDBOX_IMAGE", "forgeflow-agent")
+  const mounts = [piAgentAuthMount()]
+  if (runtime === "podman") return podman({ imageName, mounts })
+  if (runtime === "docker") return docker({ imageName, mounts })
+  throw new Error(\`Unknown FORGEFLOW_SANDBOX_RUNTIME "\${runtime}" — expected "docker" or "podman"\`)
+}
 
 export default defineConfig(({ env }) => {
+  const sandboxProvider = buildSandboxProvider(env)
+
+  const implement = createImplementWorkflow({
+    sandboxProvider,
+    promptFile: join(here, "prompts/implement.md"),
+  })
+  const review = createReviewWorkflow({
+    sandboxProvider,
+    promptFile: join(here, "prompts/review/prompt.md"),
+    extractionPrompt: readFileSync(join(here, "prompts/review/extraction.md"), "utf8"),
+  })
+  const updateBranch = createUpdateBranchWorkflow({
+    sandboxProvider,
+    promptFile: join(here, "prompts/update-branch/prompt.md"),
+    extractionPrompt: readFileSync(join(here, "prompts/update-branch/extraction.md"), "utf8"),
+  })
+
 ${targetSetup}
 
   return {
@@ -133,7 +151,11 @@ FORGEFLOW_PARALLEL=3
 # Optional cap for commands claimed in one worker run. Empty means defaults to FORGEFLOW_PARALLEL.
 FORGEFLOW_LIMIT=
 
-# Podman image used by the Sandcastle sandbox provider. Build it with:
+# Container runtime used by the Sandcastle sandbox provider: "podman" (default)
+# or "docker".
+FORGEFLOW_SANDBOX_RUNTIME=podman
+
+# Image used by the sandbox provider. Build it with:
 #   bash ${dir}/build-image.sh
 FORGEFLOW_SANDBOX_IMAGE=forgeflow-agent
 FORGEFLOW_SANDBOX_DOCKERFILE=${dir}/Dockerfile
@@ -171,19 +193,48 @@ function ensureGitignore(root: string, dir: string, written: string[]) {
   written.push(gitignorePath)
 }
 
-function mergePackageJsonScripts(root: string, dir: string, written: string[], skipped: string[]) {
+function ownSandcastleVersionRange(): string {
+  const ownPkgPath = join(here, "../../package.json")
+  const ownPkg = JSON.parse(readFileSync(ownPkgPath, "utf8"))
+  return ownPkg.dependencies?.["@ai-hero/sandcastle"] ?? "*"
+}
+
+function mergePackageJson(root: string, dir: string, written: string[], skipped: string[]) {
   const pkgPath = join(root, "package.json")
   if (!existsSync(pkgPath)) return
   const pkg = JSON.parse(readFileSync(pkgPath, "utf8"))
   pkg.scripts ??= {}
-  const desired: Record<string, string> = {
+  pkg.devDependencies ??= {}
+  let changed = false
+
+  // The generated config uses ESM imports (including sandcastle's docker/podman
+  // subpaths, which are only exported for "import", not "require") — it needs
+  // the project to be ESM. Only set this when unset; if the project has
+  // explicitly opted into CommonJS, forcing it to "module" could break the
+  // rest of the project, so leave it and surface a warning instead.
+  if (pkg.type === undefined) {
+    pkg.type = "module"
+    changed = true
+  } else if (pkg.type !== "module") {
+    skipped.push(`package.json#type is "${pkg.type}", not "module" — forgeflow.config.ts uses ESM imports and will fail to load until this project is ESM`)
+  }
+
+  const desiredScripts: Record<string, string> = {
     "forgeflow:once": `forgeflow run --config ${dir}/forgeflow.config.ts`,
     "forgeflow:drain": `forgeflow drain --config ${dir}/forgeflow.config.ts`,
   }
-  let changed = false
-  for (const [key, value] of Object.entries(desired)) {
+  const desiredDevDependencies: Record<string, string> = {
+    // The generated config imports docker()/podman() sandbox providers directly.
+    "@ai-hero/sandcastle": ownSandcastleVersionRange(),
+  }
+  for (const [key, value] of Object.entries(desiredScripts)) {
     if (pkg.scripts[key]) { skipped.push(`package.json#scripts.${key}`); continue }
     pkg.scripts[key] = value
+    changed = true
+  }
+  for (const [key, value] of Object.entries(desiredDevDependencies)) {
+    if (pkg.dependencies?.[key] || pkg.devDependencies[key]) { skipped.push(`package.json#devDependencies.${key}`); continue }
+    pkg.devDependencies[key] = value
     changed = true
   }
   if (changed) {
@@ -210,7 +261,7 @@ export function runInit(options: InitOptions): { written: string[]; skipped: str
   copyFile(join(templatesDir, "build-image.sh"), join(dir, "build-image.sh"), options.force, written, skipped)
 
   ensureGitignore(root, dir, written)
-  mergePackageJsonScripts(root, options.dir, written, skipped)
+  mergePackageJson(root, options.dir, written, skipped)
 
   return { written, skipped }
 }
