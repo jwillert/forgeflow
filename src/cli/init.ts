@@ -45,8 +45,8 @@ function copyFile(from: string, to: string, force: boolean | undefined, written:
 
 function configTemplate(options: Required<Pick<InitOptions, "provider" | "repo" | "baseBranch">>, dir: string): string {
   const providerImport = options.provider === "github"
-    ? `import { github } from "forgeflow/github"`
-    : `import { gitlab } from "forgeflow/gitlab"`
+    ? `import { github } from "@jwillert/forgeflow/github"`
+    : `import { gitlab } from "@jwillert/forgeflow/gitlab"`
 
   const targetSetup = options.provider === "github"
     ? `  const gh = github({ token: env.required("GH_TOKEN") })
@@ -66,10 +66,10 @@ function configTemplate(options: Required<Pick<InitOptions, "provider" | "repo" 
   return `import { readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
-import { defineConfig } from "forgeflow"
+import { defineConfig } from "@jwillert/forgeflow"
 ${providerImport}
-import { sqliteState } from "forgeflow/sqlite"
-import { createImplementWorkflow, createReviewWorkflow, createUpdateBranchWorkflow } from "forgeflow/workflows"
+import { sqliteState } from "@jwillert/forgeflow/sqlite"
+import { createImplementWorkflow, createReviewWorkflow, createUpdateBranchWorkflow } from "@jwillert/forgeflow/workflows"
 
 const here = dirname(fileURLToPath(import.meta.url))
 

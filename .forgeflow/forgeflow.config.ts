@@ -1,7 +1,7 @@
-import { defineConfig } from "forgeflow"
-import { github } from "forgeflow/github"
-import { sqliteState } from "forgeflow/sqlite"
-import { implement, review, updateBranch } from "forgeflow/workflows"
+import { defineConfig } from "@jwillert/forgeflow"
+import { github } from "@jwillert/forgeflow/github"
+import { sqliteState } from "@jwillert/forgeflow/sqlite"
+import { implement, review, updateBranch } from "@jwillert/forgeflow/workflows"
 
 export default defineConfig(({ env }) => {
   const gh = github({ token: env.required("GH_TOKEN") })

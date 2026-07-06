@@ -18,7 +18,7 @@ forgeflow worker --config forgeflow.config.ts --parallel 3
 You can call Forgeflow from your own `run.ts` instead of using the CLI directly:
 
 ```ts
-import { createEnvReader, createGateway } from "forgeflow"
+import { createEnvReader, createGateway } from "@jwillert/forgeflow"
 import configFactory from "./.forgeflow/forgeflow.config"
 
 const config = await configFactory({ env: createEnvReader() })
@@ -49,7 +49,7 @@ npm run forgeflow:drain
 See `examples/forgeflow.config.ts` and `examples/run.ts` for fuller examples.
 
 ```ts
-import { defineConfig, defineWorkflow, labelAdded, Match, runProcessOrThrow } from "forgeflow"
+import { defineConfig, defineWorkflow, labelAdded, Match, runProcessOrThrow } from "@jwillert/forgeflow"
 import { github } from "forgeflow/github"
 import { sqliteState } from "forgeflow/sqlite"
 

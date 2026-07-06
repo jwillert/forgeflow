@@ -1,5 +1,5 @@
-import { createEnvReader, createGateway } from "forgeflow"
-import configFactory from "./forgeflow.config"
+import { createEnvReader, createGateway } from "@jwillert/forgeflow"
+import configFactory from "./forgeflow.config.js"
 
 const config = await configFactory({ env: createEnvReader() })
 const gateway = createGateway(config)

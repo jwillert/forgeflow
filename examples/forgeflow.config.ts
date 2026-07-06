@@ -1,7 +1,7 @@
-import { defineConfig, defineWorkflow, labelAdded, Match, runProcessOrThrow } from "forgeflow"
-import { github } from "forgeflow/github"
-import { gitlab } from "forgeflow/gitlab"
-import { sqliteState } from "forgeflow/sqlite"
+import { defineConfig, defineWorkflow, labelAdded, Match, runProcessOrThrow } from "@jwillert/forgeflow"
+import { github } from "@jwillert/forgeflow/github"
+import { gitlab } from "@jwillert/forgeflow/gitlab"
+import { sqliteState } from "@jwillert/forgeflow/sqlite"
 
 const implement = defineWorkflow("implement", {
   match: async ({ event }) => {

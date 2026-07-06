@@ -127,7 +127,7 @@ Provider projections are explicit in `run()`. The engine records internal comman
 ## Configuration shape
 
 ```ts
-import { defineConfig } from "forgeflow"
+import { defineConfig } from "@jwillert/forgeflow"
 import { github } from "forgeflow/github"
 import { gitlab } from "forgeflow/gitlab"
 import { sqliteState } from "forgeflow/sqlite"
@@ -205,7 +205,7 @@ forgeflow worker --config forgeflow.config.ts --parallel 3
 Projects can also invoke Forgeflow from a script:
 
 ```ts
-import { createEnvReader, createGateway } from "forgeflow"
+import { createEnvReader, createGateway } from "@jwillert/forgeflow"
 import configFactory from "./forgeflow.config"
 
 const config = await configFactory({ env: createEnvReader() })
