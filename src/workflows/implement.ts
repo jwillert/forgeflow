@@ -4,7 +4,7 @@ import { defineWorkflow, Match, labelAdded } from "../core/workflow.js"
 import type { Workflow } from "../core/workflow.js"
 import type { WorkTargetRef } from "../core/types.js"
 import { checkoutBaseBranch, commitsAhead, pushBranch } from "./shared/git.js"
-import { createPodmanSandbox, piAgent, type SandboxDefaults } from "./shared/sandcastle.js"
+import { createAgentSandbox, piAgent, type SandboxDefaults } from "./shared/sandcastle.js"
 import { runWithAgentLifecycle } from "./shared/lifecycle.js"
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -56,7 +56,7 @@ export function createImplementWorkflow(options: ImplementWorkflowOptions = {}):
           ? [`# ${issueSnapshot.title}\n\n${issueSnapshot.body ?? ""}`, ...issueComments.map(c => `---\n${c.author ?? "unknown"}: ${c.body}`)].join("\n\n")
           : command.body ?? `Issue #${issueNumber}: ${command.title}`
 
-        await using sandbox = await createPodmanSandbox({
+        await using sandbox = await createAgentSandbox({
           ...options,
           branch: checkout.workBranch,
           preflightCommand: options.preflightCommand,

@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url"
 import { defineWorkflow, Match, isChangeRequestKind, labelAdded } from "../core/workflow.js"
 import type { Workflow } from "../core/workflow.js"
 import { git, pushBranch } from "./shared/git.js"
-import { createPodmanSandbox, runSandboxWithExtraction, type SandboxDefaults } from "./shared/sandcastle.js"
+import { createAgentSandbox, runSandboxWithExtraction, type SandboxDefaults } from "./shared/sandcastle.js"
 import { fetchChangeRequestContext, filterInlineComments, filterReplies, validateReviewOutput } from "./shared/review-output.js"
 import { runWithAgentLifecycle } from "./shared/lifecycle.js"
 
@@ -43,7 +43,7 @@ export function createReviewWorkflow(options: ReviewWorkflowOptions = {}): Workf
         const details = await codeReviewHost.getChangeRequestDetails(target)
         if (details.isCrossRepository) throw new Error("Refused to run review on a cross-repository change request.")
 
-        await using sandbox = await createPodmanSandbox({
+        await using sandbox = await createAgentSandbox({
           ...options,
           branch: details.sourceBranch,
           preflightCommand: options.preflightCommand,

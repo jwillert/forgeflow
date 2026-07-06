@@ -13,7 +13,7 @@
     "!dist/core/testing"
   ],
   "bin": {
-    "forgeflow": "./dist/cli/index.js"
+    "forgeflow": "dist/cli/index.js"
   },
   "exports": {
     ".": "./dist/index.js",

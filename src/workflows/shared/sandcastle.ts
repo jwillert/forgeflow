@@ -1,12 +1,28 @@
 import * as sandcastle from "@ai-hero/sandcastle"
+import type { SandboxProvider } from "@ai-hero/sandcastle"
 import { podman } from "@ai-hero/sandcastle/sandboxes/podman"
 
 export type AgentThinking = "off" | "minimal" | "low" | "medium" | "high" | "xhigh"
 
 export interface SandboxDefaults {
+  /** Podman image name, used only when `sandboxProvider` isn't given (default: forgeflow-agent). */
   readonly sandboxImage?: string
+  /**
+   * Bring your own sandcastle sandbox provider (e.g. `docker({ imageName: "forgeflow-agent" })`)
+   * instead of the default podman one. Must support the persistent multi-run pattern
+   * `createSandbox()` provides — podman and docker both do; sandcastle's isolated
+   * providers (daytona, vercel) and no-sandbox do not fit this execution model.
+   * When set, `sandboxImage` is ignored and you own wiring any mounts yourself —
+   * see `piAgentAuthMount()` for the mount the default podman setup uses.
+   */
+  readonly sandboxProvider?: SandboxProvider
   readonly model?: string
   readonly thinking?: AgentThinking
+}
+
+/** The bind-mount the default podman sandbox uses to give the Pi agent its host auth. Reuse this if you bring your own sandbox provider and still want Pi's host auth available. */
+export function piAgentAuthMount() {
+  return { hostPath: "~/.pi/agent", sandboxPath: "/home/agent/.pi/agent" }
 }
 
 export function piAgent(defaults: SandboxDefaults = {}): ReturnType<typeof sandcastle.pi> {
@@ -15,25 +31,20 @@ export function piAgent(defaults: SandboxDefaults = {}): ReturnType<typeof sandc
   return sandcastle.pi(model, { thinking })
 }
 
-export function podmanSandboxProvider(defaults: SandboxDefaults = {}) {
+function defaultPodmanProvider(defaults: SandboxDefaults = {}): SandboxProvider {
   return podman({
     imageName: defaults.sandboxImage ?? process.env.FORGEFLOW_SANDBOX_IMAGE ?? "forgeflow-agent",
-    mounts: [
-      {
-        hostPath: "~/.pi/agent",
-        sandboxPath: "/home/agent/.pi/agent",
-      },
-    ],
+    mounts: [piAgentAuthMount()],
   })
 }
 
-export async function createPodmanSandbox(input: SandboxDefaults & {
+export async function createAgentSandbox(input: SandboxDefaults & {
   branch: string
   preflightCommand?: string
   preflightTimeoutMs?: number
 }) {
   return await sandcastle.createSandbox({
-    sandbox: podmanSandboxProvider(input),
+    sandbox: input.sandboxProvider ?? defaultPodmanProvider(input),
     branch: input.branch,
     hooks: input.preflightCommand
       ? {
@@ -81,7 +92,7 @@ function parseStructuredJson(raw: string): unknown {
 }
 
 export async function runSandboxWithExtraction<T>(input: SandboxDefaults & {
-  sandbox: Awaited<ReturnType<typeof createPodmanSandbox>>
+  sandbox: Awaited<ReturnType<typeof createAgentSandbox>>
   name: string
   promptFile: string
   promptArgs: Record<string, string>
@@ -89,7 +100,7 @@ export async function runSandboxWithExtraction<T>(input: SandboxDefaults & {
   validate: (value: unknown) => T
   idleTimeoutSeconds?: number
   maxRetries?: number
-}): Promise<Awaited<ReturnType<Awaited<ReturnType<typeof createPodmanSandbox>>["run"]>> & { output: T }> {
+}): Promise<Awaited<ReturnType<Awaited<ReturnType<typeof createAgentSandbox>>["run"]>> & { output: T }> {
   const produce = await input.sandbox.run({
     name: input.name,
     agent: piAgent(input),

@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs"
 import { defineWorkflow, Match, isChangeRequestKind, labelAdded } from "../core/workflow.js"
 import type { Workflow } from "../core/workflow.js"
 import { pushBranch } from "./shared/git.js"
-import { createPodmanSandbox, piAgent, runSandboxWithExtraction, type SandboxDefaults } from "./shared/sandcastle.js"
+import { createAgentSandbox, piAgent, runSandboxWithExtraction, type SandboxDefaults } from "./shared/sandcastle.js"
 import { validateUpdateBranchOutput } from "./shared/review-output.js"
 import { runWithAgentLifecycle } from "./shared/lifecycle.js"
 
@@ -41,7 +41,7 @@ export function createUpdateBranchWorkflow(options: UpdateBranchWorkflowOptions 
         const details = await codeReviewHost.getChangeRequestDetails(target)
         if (details.isCrossRepository) throw new Error("Refused to update a cross-repository change request.")
 
-        await using sandbox = await createPodmanSandbox({ ...options, branch: details.sourceBranch })
+        await using sandbox = await createAgentSandbox({ ...options, branch: details.sourceBranch })
         await sandbox.exec(`git fetch origin ${details.targetBranch}`)
         const mergeBase = (await sandbox.exec(`git merge-base HEAD origin/${details.targetBranch}`)).stdout.trim()
         const baseSha = (await sandbox.exec(`git rev-parse origin/${details.targetBranch}`)).stdout.trim()
