@@ -1,6 +1,6 @@
 {
   "name": "@jwillert/forgeflow",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Agent workflow gateway for code forges and code agents.",
   "type": "module",
   "license": "MIT",
