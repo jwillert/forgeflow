@@ -24,7 +24,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/copy-assets.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --test dist/**/*.test.js",
+    "test": "node --test dist",
     "forgeflow:once": "node dist/cli/index.js run --config .forgeflow/forgeflow.config.ts",
     "forgeflow:drain": "node dist/cli/index.js drain --config .forgeflow/forgeflow.config.ts",
     "prepare": "npm run build"

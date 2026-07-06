@@ -89,3 +89,27 @@ A Gateway-owned capability that decides whether an actor or target is allowed to
 ## Enabled Target
 
 An external repo, project, or work item scope that the Gateway is allowed to observe and act on. Provider token access is not enough; a target must be explicitly enabled in Gateway configuration.
+
+## Built-in Workflow
+
+An Externalized Workflow that ships with Forgeflow itself (`implement`, `review`, `update-branch`, exposed as `createImplementWorkflow`/`createReviewWorkflow`/`createUpdateBranchWorkflow`) rather than one a user writes from scratch. A Built-in Workflow is still an Externalized Workflow — it runs outside CI/CD and is still provider-agnostic — it is just distributed as a configurable default instead of bespoke per-project code.
+
+## Code Review Host
+
+A Capability Interface for reviewing a Change Request or discussing an Issue across providers: fetching Change Request details, listing General Comments and Review Threads, posting a review, replying to a thread, and marking a Change Request ready. `listGeneralComments` works on any Work Target Ref (Issue or Change Request); the rest apply to Change Requests only.
+
+## Review Thread
+
+A diff-anchored (or general) discussion thread on a Change Request, normalized across GitHub review threads and GitLab discussions. A Review Thread has its own identity distinct from its individual comments — replying targets the thread, not a specific comment within it, since GitLab has no finer-grained reply target.
+
+## General Comment
+
+A plain, non-diff-anchored comment or note on an Issue or Change Request, normalized across GitHub issue/PR comments plus review summaries, and GitLab notes.
+
+## Blocking Issue
+
+An Issue that must reach a closed state before a workflow will accept a Match Decision for another Issue that names it as a dependency. A workflow discovers Blocking Issues through `WorkReader.listBlockingIssues`, which combines a provider's native issue-dependency relationship (GitHub's `blockedBy`, GitLab's `is_blocked_by` issue link) with a portable "Blocked by #N" / "Depends on #N" text convention in the body. A Workflow Matcher defers while any Blocking Issue is still open.
+
+## Tag Trigger
+
+A Normalized Event of kind `tag_created`, emitted when a Polling Event Source observes a git tag it has not seen before. Unlike label- or comment-based triggers, the tag's existence is itself the trigger signal — there is no separate opt-in marker — so a target's first-ever poll records existing tags as a baseline without emitting events for them, to avoid retroactively triggering on a repository's entire tag history.
